@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#176b55">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <title>Mon budget</title>
+  <style>
+    :root { font-family: Arial, sans-serif; color: #202a27; background: #f2f5f3; }
+    * { box-sizing: border-box; }
+    body { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+    main { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 8px 28px #173a2d12; }
+    h1 { margin: 0; }
+    h2 { margin: 28px 0 14px; font-size: 1.2rem; }
+    .entete { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .totaux { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 22px 0; }
+    .carte { padding: 16px; background: #eef4f1; border-radius: 10px; }
+    .carte strong { display: inline-block; margin-top: 8px; font-size: 1.2rem; }
+    .solde-negatif { color: #a33; }
+    button, input, select { font: inherit; }
+    button { padding: 11px 14px; cursor: pointer; color: white; background: #176b55; border: 0; border-radius: 7px; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #89c9a8; outline-offset: 2px; }
+    .installer { white-space: nowrap; }
+    .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .panneau { padding: 18px; border: 1px solid #e4ebe7; border-radius: 10px; }
+    .panneau h2 { margin-top: 0; }
+    form { display: grid; gap: 12px; }
+    label { display: grid; gap: 6px; font-size: .92rem; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #cbd6d0; border-radius: 6px; background: white; }
+    .budget-ligne { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+    .progression { height: 12px; margin-top: 16px; overflow: hidden; background: #e8eeeb; border-radius: 8px; }
+    .progression > span { display: block; width: 0; height: 100%; background: #248364; transition: width .2s; }
+    .progression.depassee > span { background: #b34141; }
+    .aide, .statut { color: #5b6862; font-size: .9rem; }
+    .statut { min-height: 1.2em; margin: 8px 0 0; }
+    .chart-barres { display: flex; align-items: end; justify-content: space-around; gap: 8px; height: 190px; padding: 14px 6px 0; border-bottom: 1px solid #cbd6d0; }
+    .mois-colonne { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: end; height: 100%; min-width: 0; }
+    .barres { display: flex; align-items: end; gap: 4px; height: 100%; width: 100%; justify-content: center; }
+    .barre { display: block; width: min(28px, 42%); min-height: 2px; border-radius: 4px 4px 0 0; }
+    .barre.revenu { background: #248364; }
+    .barre.depense { background: #e39b4a; }
+    .mois-label { margin-top: 7px; color: #5b6862; font-size: .75rem; }
+    .legende { display: flex; gap: 16px; margin-top: 12px; color: #5b6862; font-size: .85rem; }
+    .legende span::before { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; content: ""; }
+    .legende .revenu::before { background: #248364; }
+    .legende .depense::before { background: #e39b4a; }
+    .categories-chart { display: grid; gap: 12px; }
+    .categorie-ligne { display: grid; grid-template-columns: minmax(75px, 1fr) 2fr auto; gap: 10px; align-items: center; font-size: .88rem; }
+    .categorie-barre { height: 10px; overflow: hidden; background: #e8eeeb; border-radius: 6px; }
+    .categorie-barre span { display: block; height: 100%; background: #5485a6; border-radius: 6px; }
+    .categorie-montant { white-space: nowrap; }
+    .operations-entete { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .operations-entete h2 { margin-bottom: 0; }
+    #liste { padding-left: 20px; }
+    #liste li { margin: 12px 0; }
+    .operation-detail { color: #5b6862; font-size: .85rem; }
+    .supprimer { margin-left: 8px; padding: 6px 9px; background: #a33; font-size: .85rem; }
+    @media (max-width: 650px) {
+      body { margin: 12px auto; padding: 0 10px; }
+      main { padding: 18px; }
+      .entete { align-items: flex-start; }
+      .totaux { grid-template-columns: 1fr; gap: 8px; }
+      .carte { display: flex; justify-content: space-between; align-items: center; }
+      .carte strong { margin-top: 0; }
+      .grille { grid-template-columns: 1fr; }
+      .installer { padding: 9px; font-size: .85rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="entete">
+      <h1>Mon budget</h1>
+      <button id="installer" class="installer" type="button">Installer l’application</button>
+    </header>
+    <p id="statut-installation" class="statut" role="status" aria-live="polite"></p>
+
+    <label for="mois">Mois à consulter
+      <input id="mois" type="month">
+    </label>
+
+    <div class="totaux" aria-label="Résumé du mois">
+      <div class="carte">Revenus<strong id="revenus">0,00 €</strong></div>
+      <div class="carte">Dépenses<strong id="depenses">0,00 €</strong></div>
+      <div class="carte">Solde<strong id="solde">0,00 €</strong></div>
+    </div>
+
+    <section class="panneau" aria-labelledby="titre-budget">
+      <h2 id="titre-budget">Budget du mois</h2>
+      <form id="formulaire-budget" class="budget-ligne">
+        <label for="plafond">Plafond de dépenses (€)
+          <input id="plafond" type="number" min="0" step="0.01" placeholder="Ex. 1 500">
+        </label>
+        <button type="submit">Enregistrer</button>
+      </form>
+      <div id="progression-budget" class="progression" role="progressbar" aria-label="Budget consommé" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <p id="resume-budget" class="aide">Définissez un plafond pour suivre vos dépenses.</p>
+    </section>
+
+    <div class="grille" style="margin-top: 18px">
+      <section class="panneau" aria-labelledby="titre-ajout">
+        <h2 id="titre-ajout">Ajouter une opération</h2>
+        <form id="formulaire">
+          <label for="description">Description
+            <input id="description" placeholder="Ex. courses" required maxlength="100">
+          </label>
+          <label for="montant">Montant (€)
+            <input id="montant" type="number" min="0.01" step="0.01" placeholder="Ex. 42,50" required>
+          </label>
+          <label for="type">Type
+            <select id="type">
+              <option value="depense">Dépense</option>
+              <option value="revenu">Revenu</option>
+            </select>
+          </label>
+          <label for="categorie">Catégorie
+            <select id="categorie"></select>
+          </label>
+          <label for="date-operation">Date
+            <input id="date-operation" type="date" required>
+          </label>
+          <button type="submit">Ajouter</button>
+        </form>
+      </section>
+
+      <section class="panneau" aria-labelledby="titre-historique">
+        <h2 id="titre-historique">Revenus et dépenses — 6 mois</h2>
+        <div id="graphique-mensuel" class="chart-barres" role="img"></div>
+        <div class="legende" aria-hidden="true">
+          <span class="revenu">Revenus</span><span class="depense">Dépenses</span>
+        </div>
+      </section>
+    </div>
+
+    <section class="panneau" style="margin-top: 18px" aria-labelledby="titre-categories">
+      <h2 id="titre-categories">Dépenses par catégorie — mois sélectionné</h2>
+      <div id="graphique-categories" class="categories-chart" role="img"></div>
+    </section>
+
+    <section aria-labelledby="titre-operations">
+      <div class="operations-entete">
+        <h2 id="titre-operations">Mes opérations</h2>
+      </div>
+      <ul id="liste"></ul>
+    </section>
+  </main>
+
+  <script>
+    const cle = "monBudgetOperations";
+    const cleBudgets = "monBudgetPlafonds";
+    const maintenant = new Date();
+    const dateLocale = date => {
+      const annee = date.getFullYear();
+      const mois = String(date.getMonth() + 1).padStart(2, "0");
+      const jour = String(date.getDate()).padStart(2, "0");
+      return `${annee}-${mois}-${jour}`;
+    };
+    const moisActuel = dateLocale(maintenant).slice(0, 7);
+    const categories = {
+      depense: ["Logement", "Courses", "Transport", "Santé", "Loisirs", "Abonnements", "Autre"],
+      revenu: ["Salaire", "Aides", "Autre"]
+    };
+    let operations = JSON.parse(localStorage.getItem(cle) || "[]");
+    let budgets = JSON.parse(localStorage.getItem(cleBudgets) || "{}");
+    operations = operations.map(operation => ({
+      ...operation,
+      date: /^\d{4}-\d{2}-\d{2}$/.test(operation.date || "") ? operation.date : dateLocale(maintenant),
+      categorie: operation.categorie || "Autre"
+    }));
+
+    const euros = montant => Number(montant).toLocaleString("fr-FR", {
+      style: "currency", currency: "EUR"
+    });
+    const moisSelectionne = () => document.querySelector("#mois").value;
+    const operationsDuMois = mois => operations.filter(operation => operation.date.startsWith(mois));
+    function dateParDefautDuMois(mois) {
+      const [annee, numeroMois] = mois.split("-").map(Number);
+      const jour = Math.min(maintenant.getDate(), new Date(annee, numeroMois, 0).getDate());
+      return `${mois}-${String(jour).padStart(2, "0")}`;
+    }
+
+    function actualiserCategories() {
+      const select = document.querySelector("#categorie");
+      const valeurs = categories[document.querySelector("#type").value];
+      select.replaceChildren(...valeurs.map(nom => {
+        const option = document.createElement("option");
+        option.value = nom;
+        option.textContent = nom;
+        return option;
+      }));
+    }
+
+    function afficherBudget(depenses, mois) {
+      const plafond = Number(budgets[mois] || 0);
+      const progression = document.querySelector("#progression-budget");
+      const consommation = plafond > 0 ? Math.min(depenses / plafond * 100, 100) : 0;
+      progression.querySelector("span").style.width = `${consommation}%`;
+      progression.classList.toggle("depassee", plafond > 0 && depenses > plafond);
+      progression.setAttribute("aria-valuenow", consommation.toFixed(0));
+      document.querySelector("#plafond").value = plafond > 0 ? plafond : "";
+      document.querySelector("#resume-budget").textContent = plafond > 0
+        ? depenses > plafond
+          ? `Plafond dépassé de ${euros(depenses - plafond)} (budget : ${euros(plafond)}).`
+          : `${euros(plafond - depenses)} restants sur ${euros(plafond)} (${consommation.toFixed(0)} % utilisés).`
+        : "Définissez un plafond pour suivre vos dépenses.";
+    }
+
+    function afficherGraphiqueMensuel() {
+      const graphique = document.querySelector("#graphique-mensuel");
+      graphique.replaceChildren();
+      const mois = [];
+      const selection = moisSelectionne() || moisActuel;
+      const [annee, numeroMois] = selection.split("-").map(Number);
+      for (let decalage = 5; decalage >= 0; decalage--) {
+        const date = new Date(annee, numeroMois - 1 - decalage, 1);
+        const cleMois = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        const duMois = operationsDuMois(cleMois);
+        mois.push({
+          cle: cleMois,
+          etiquette: date.toLocaleDateString("fr-FR", { month: "short" }),
+          revenus: duMois.filter(op => op.type === "revenu").reduce((total, op) => total + Number(op.montant), 0),
+          depenses: duMois.filter(op => op.type === "depense").reduce((total, op) => total + Number(op.montant), 0)
+        });
+      }
+      const maximum = Math.max(1, ...mois.flatMap(item => [item.revenus, item.depenses]));
+      graphique.setAttribute("aria-label", mois.map(item =>
+        `${item.etiquette} : revenus ${euros(item.revenus)}, dépenses ${euros(item.depenses)}`
+      ).join(". "));
+      mois.forEach(item => {
+        const colonne = document.createElement("div");
+        colonne.className = "mois-colonne";
+        colonne.setAttribute("aria-hidden", "true");
+        const barres = document.createElement("div");
+        barres.className = "barres";
+        [["revenu", item.revenus], ["depense", item.depenses]].forEach(([type, montant]) => {
+          const barre = document.createElement("span");
+          barre.className = `barre ${type}`;
+          barre.style.height = `${montant > 0 ? Math.max(montant / maximum * 100, 3) : 0}%`;
+          barres.append(barre);
+        });
+        const etiquette = document.createElement("span");
+        etiquette.className = "mois-label";
+        etiquette.textContent = item.etiquette;
+        colonne.append(barres, etiquette);
+        graphique.append(colonne);
+      });
+    }
+
+    function afficherGraphiqueCategories(mois) {
+      const graphique = document.querySelector("#graphique-categories");
+      graphique.replaceChildren();
+      const totaux = operationsDuMois(mois)
+        .filter(operation => operation.type === "depense")
+        .reduce((resultat, operation) => {
+          resultat[operation.categorie] = (resultat[operation.categorie] || 0) + Number(operation.montant);
+          return resultat;
+        }, {});
+      const entrees = Object.entries(totaux).sort((a, b) => b[1] - a[1]);
+      if (entrees.length === 0) {
+        graphique.textContent = "Aucune dépense pour ce mois.";
+        graphique.className = "categories-chart aide";
+        graphique.setAttribute("aria-label", "Aucune dépense pour ce mois.");
+        return;
+      }
+      graphique.className = "categories-chart";
+      graphique.setAttribute("aria-label", entrees.map(([nom, montant]) => `${nom} : ${euros(montant)}`).join(". "));
+      const maximum = Math.max(...entrees.map(([, montant]) => montant));
+      entrees.forEach(([nom, montant]) => {
+        const ligne = document.createElement("div");
+        ligne.className = "categorie-ligne";
+        const etiquette = document.createElement("span");
+        etiquette.textContent = nom;
+        const piste = document.createElement("span");
+        piste.className = "categorie-barre";
+        const barre = document.createElement("span");
+        barre.style.width = `${montant / maximum * 100}%`;
+        piste.append(barre);
+        const valeur = document.createElement("strong");
+        valeur.className = "categorie-montant";
+        valeur.textContent = euros(montant);
+        ligne.append(etiquette, piste, valeur);
+        graphique.append(ligne);
+      });
+    }
+
+    function afficher() {
+      const mois = moisSelectionne();
+      const operationsMois = operationsDuMois(mois);
+      const revenus = operationsMois
+        .filter(operation => operation.type === "revenu")
+        .reduce((total, operation) => total + Number(operation.montant), 0);
+      const depenses = operationsMois
+        .filter(operation => operation.type === "depense")
+        .reduce((total, operation) => total + Number(operation.montant), 0);
+
+      document.querySelector("#revenus").textContent = euros(revenus);
+      document.querySelector("#depenses").textContent = euros(depenses);
+      const solde = document.querySelector("#solde");
+      solde.textContent = euros(revenus - depenses);
+      solde.classList.toggle("solde-negatif", revenus < depenses);
+      afficherBudget(depenses, mois);
+      afficherGraphiqueMensuel();
+      afficherGraphiqueCategories(mois);
+
+      const liste = document.querySelector("#liste");
+      liste.replaceChildren();
+      if (operationsMois.length === 0) {
+        const vide = document.createElement("li");
+        vide.className = "aide";
+        vide.textContent = "Aucune opération pour ce mois.";
+        liste.append(vide);
+      }
+      operationsMois.forEach(operation => {
+        const index = operations.indexOf(operation);
+        const ligne = document.createElement("li");
+        ligne.append(`${operation.description} — ${operation.type === "revenu" ? "+" : "-"}${euros(operation.montant)} `);
+        const detail = document.createElement("span");
+        detail.className = "operation-detail";
+        detail.textContent = `(${operation.categorie}, ${new Date(`${operation.date}T00:00:00`).toLocaleDateString("fr-FR")}) `;
+        const bouton = document.createElement("button");
+        bouton.textContent = "Supprimer";
+        bouton.className = "supprimer";
+        bouton.type = "button";
+        bouton.addEventListener("click", () => {
+          operations.splice(index, 1);
+          sauvegarder();
+        });
+        ligne.append(detail, bouton);
+        liste.append(ligne);
+      });
+    }
+
+    function sauvegarder() {
+      localStorage.setItem(cle, JSON.stringify(operations));
+      afficher();
+    }
+
+    document.querySelector("#mois").value = moisActuel;
+    document.querySelector("#date-operation").value = dateParDefautDuMois(moisActuel);
+    document.querySelector("#type").addEventListener("change", actualiserCategories);
+    document.querySelector("#mois").addEventListener("change", evenement => {
+      document.querySelector("#date-operation").value = dateParDefautDuMois(evenement.target.value);
+      afficher();
+    });
+    document.querySelector("#formulaire").addEventListener("submit", evenement => {
+      evenement.preventDefault();
+      const description = document.querySelector("#description").value.trim();
+      const montant = Number(document.querySelector("#montant").value);
+      const type = document.querySelector("#type").value;
+      const categorie = document.querySelector("#categorie").value;
+      const date = document.querySelector("#date-operation").value;
+      if (!description || !Number.isFinite(montant) || montant <= 0 || !date) return;
+
+      operations.push({ description, montant, type, categorie, date });
+      document.querySelector("#mois").value = date.slice(0, 7);
+      sauvegarder();
+      evenement.target.reset();
+      actualiserCategories();
+      document.querySelector("#date-operation").value = dateParDefautDuMois(moisSelectionne());
+    });
+    document.querySelector("#formulaire-budget").addEventListener("submit", evenement => {
+      evenement.preventDefault();
+      const valeur = document.querySelector("#plafond").value;
+      const plafond = Number(valeur);
+      if (valeur === "" || !Number.isFinite(plafond) || plafond < 0) return;
+      const mois = moisSelectionne();
+      if (plafond === 0) {
+        delete budgets[mois];
+      } else {
+        budgets[mois] = plafond;
+      }
+      localStorage.setItem(cleBudgets, JSON.stringify(budgets));
+      afficher();
+    });
+
+    let installationDifferee;
+    const boutonInstallation = document.querySelector("#installer");
+    const statutInstallation = document.querySelector("#statut-installation");
+    window.addEventListener("beforeinstallprompt", evenement => {
+      evenement.preventDefault();
+      installationDifferee = evenement;
+    });
+    boutonInstallation.addEventListener("click", async () => {
+      if (!installationDifferee) {
+        statutInstallation.textContent = "Sur iPhone/iPad : Partager > Sur l’écran d’accueil. Sur Android : menu du navigateur > Installer l’application.";
+        return;
+      }
+      installationDifferee.prompt();
+      const choix = await installationDifferee.userChoice;
+      statutInstallation.textContent = choix.outcome === "accepted"
+        ? "Installation lancée."
+        : "Installation annulée.";
+      installationDifferee = null;
+    });
+    window.addEventListener("appinstalled", () => {
+      statutInstallation.textContent = "Application installée.";
+      boutonInstallation.hidden = true;
+    });
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      navigator.serviceWorker.register("./sw.js").catch(erreur => {
+        console.error("Impossible d’enregistrer le service worker :", erreur);
+      });
+    }
+
+    actualiserCategories();
+    afficher();
+  </script>
+</body>
+</html>
